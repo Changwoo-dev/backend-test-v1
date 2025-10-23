@@ -23,6 +23,7 @@ class PartnerEntity(
     @Column(nullable = false)
     var active: Boolean = true,
 ) {
+
     protected constructor() : this(
         id = null,
         code = "",

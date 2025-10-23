@@ -2,7 +2,6 @@ package im.bigs.pg.application.payment.port.`in`
 
 import com.fasterxml.jackson.annotation.JsonFormat
 import java.time.Instant
-import java.time.LocalDateTime
 
 /**
  * 결제 조회 조건.

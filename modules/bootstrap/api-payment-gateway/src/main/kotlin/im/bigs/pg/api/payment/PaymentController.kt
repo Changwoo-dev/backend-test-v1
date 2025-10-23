@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 /**
  * 결제 API 진입점.
@@ -79,7 +80,14 @@ class PaymentController(
         @RequestParam(defaultValue = "20") limit: Int,
     ): ResponseEntity<QueryResponse> {
         val res = queryPaymentsUseCase.query(
-            QueryFilter(partnerId, status, from, to, cursor, limit),
+            QueryFilter(
+                partnerId,
+                status,
+                from?.atZone(ZoneOffset.UTC)?.toInstant(),
+                to?.atZone(ZoneOffset.UTC)?.toInstant(),
+                cursor,
+                limit
+            ),
         )
         return ResponseEntity.ok(
             QueryResponse(

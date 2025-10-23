@@ -7,10 +7,12 @@ import im.bigs.pg.application.payment.port.out.PaymentSummaryFilter
 import im.bigs.pg.application.payment.port.out.PaymentSummaryProjection
 import im.bigs.pg.domain.payment.Payment
 import im.bigs.pg.domain.payment.PaymentStatus
+import im.bigs.pg.domain.payment.PaymentSummary
 import im.bigs.pg.infra.persistence.payment.entity.PaymentEntity
 import im.bigs.pg.infra.persistence.payment.repository.PaymentJpaRepository
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Component
+import java.time.Instant
 import java.time.ZoneOffset
 
 /** PaymentOutPort 구현체(JPA 기반). */
@@ -18,6 +20,36 @@ import java.time.ZoneOffset
 class PaymentPersistenceAdapter(
     private val repo: PaymentJpaRepository,
 ) : PaymentOutPort {
+
+    override fun findPayments(
+        partnerId: Long?,
+        status: String?,
+        from: Instant?,
+        to: Instant?,
+        cursorCreatedAt: Instant?,
+        cursorId: Long?,
+        limit: Int
+    ): List<Payment> {
+        val pageable = PageRequest.of(0, limit + 1)
+        val entities = repo.pageBy(partnerId, status, from, to, cursorCreatedAt, cursorId, pageable)
+        val hasNext = entities.size > limit
+        val items = if (hasNext) entities.dropLast(1) else entities
+        return items.map { it.toDomain() }
+    }
+
+    override fun findPaymentSummary(
+        partnerId: Long?,
+        status: String?,
+        from: Instant?,
+        to: Instant?
+    ): PaymentSummary {
+        val row = repo.summary(partnerId, status, from, to).firstOrNull() ?: arrayOf(0, 0, 0)
+        return PaymentSummary(
+            count = (row[0] as Number).toLong(),
+            totalAmount = java.math.BigDecimal.valueOf((row[1] as Number).toDouble()),
+            totalNetAmount = java.math.BigDecimal.valueOf((row[2] as Number).toDouble()),
+        )
+    }
 
     override fun save(payment: Payment): Payment =
         repo.save(payment.toEntity()).toDomain()
@@ -31,10 +63,10 @@ class PaymentPersistenceAdapter(
             toAt = query.to?.toInstant(ZoneOffset.UTC),
             cursorCreatedAt = query.cursorCreatedAt?.toInstant(ZoneOffset.UTC),
             cursorId = query.cursorId,
-            org = PageRequest.of(0, pageSize + 1),
+            pageable = PageRequest.of(0, pageSize + 1),
         )
         val hasNext = list.size > pageSize
-        val items = list.take(pageSize)
+        val items = if (hasNext) list.dropLast(1) else list
         val last = items.lastOrNull()
         return PaymentPage(
             items = items.map { it.toDomain() },

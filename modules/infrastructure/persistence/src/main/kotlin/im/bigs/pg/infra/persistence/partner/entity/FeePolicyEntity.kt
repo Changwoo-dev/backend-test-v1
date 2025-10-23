@@ -27,6 +27,7 @@ class FeePolicyEntity(
     @Column(precision = 15, scale = 0)
     var fixedFee: BigDecimal? = null,
 ) {
+
     protected constructor() : this(
         id = null,
         partnerId = 0L,

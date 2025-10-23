@@ -4,9 +4,9 @@ import im.bigs.pg.application.payment.port.`in`.QueryFilter
 import im.bigs.pg.application.payment.port.`in`.QueryPaymentsUseCase
 import im.bigs.pg.application.payment.port.`in`.QueryResult
 import im.bigs.pg.application.payment.port.out.PaymentOutPort
-import im.bigs.pg.domain.payment.PaymentSummary
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.util.Base64
 
@@ -29,44 +29,42 @@ class QueryPaymentsService(
      * @return 조회 결과(목록/통계/커서)
      */
     override fun query(filter: QueryFilter): QueryResult {
-        val (cursorCreatedAt, cursorId) = decodeCursor(filter.cursor)
-
+        val from = filter.from?.atZone(ZoneOffset.UTC)?.toInstant()
+        val to = filter.to?.atZone(ZoneOffset.UTC)?.toInstant()
+        val cursor = decodeCursor(filter.cursor)
         val items = paymentOutPort.findPayments(
             partnerId = filter.partnerId,
             status = filter.status,
-            from = filter.from?.atZone(ZoneOffset.UTC)?.toInstant(),
-            to = filter.to?.atZone(ZoneOffset.UTC)?.toInstant(),
-            cursorCreatedAt = cursorCreatedAt,
-            cursorId = cursorId,
-            limit = filter.limit + 1
+            from = from,
+            to = to,
+            cursorCreatedAt = cursor.first,
+            cursorId = cursor.second,
+            limit = filter.limit
         )
 
         val summary = paymentOutPort.findPaymentSummary(
             partnerId = filter.partnerId,
             status = filter.status,
-            from = filter.from?.atZone(ZoneOffset.UTC)?.toInstant(),
-            to = filter.to?.atZone(ZoneOffset.UTC)?.toInstant()
+            from = from,
+            to = to
         )
 
-        val hasNext = items.size > filter.limit
-        val trimmed = if (hasNext) items.dropLast(1) else items
-        val last = trimmed.lastOrNull()
-        val nextCursor = encodeCursor(
-            last?.createdAt?.atZone(ZoneOffset.UTC)?.toInstant(),
-            last?.id
-        )
+        val hasNext = items.size >= filter.limit
+        val last = items.lastOrNull()
+        val nextCursor = encodeCursor(last?.createdAt, last?.id)
 
         return QueryResult(
-            items = trimmed,
+            items = items,
             summary = summary,
             nextCursor = nextCursor,
             hasNext = hasNext
         )
     }
 
-    private fun encodeCursor(createdAt: Instant?, id: Long?): String? {
+    private fun encodeCursor(createdAt: LocalDateTime?, id: Long?): String? {
         if (createdAt == null || id == null) return null
-        val raw = "${createdAt.toEpochMilli()}:$id"
+        val epochMillis = createdAt.toInstant(ZoneOffset.UTC).toEpochMilli()
+        val raw = "$epochMillis:$id"
         return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.toByteArray())
     }
 
