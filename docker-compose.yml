@@ -1,0 +1,11 @@
+services:
+  banana-db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: banana
+      POSTGRES_PASSWORD: banana1234
+      POSTGRES_DB: banana
+    ports:
+      - "5432:5432"
+
