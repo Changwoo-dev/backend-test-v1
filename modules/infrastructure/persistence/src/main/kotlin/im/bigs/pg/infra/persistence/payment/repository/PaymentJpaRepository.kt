@@ -18,8 +18,8 @@ interface PaymentJpaRepository : JpaRepository<PaymentEntity, Long> {
     select p from PaymentEntity p
     where (:partnerId is null or p.partnerId = :partnerId)
       and (:status is null or p.status = :status)
-      and (p.createdAt >= coalesce(:fromAt, p.createdAt))
-      and (p.createdAt < coalesce(:toAt, p.createdAt))
+      and (:fromAt is null or p.createdAt >= :fromAt)
+      and (:toAt is null or p.createdAt < :toAt)
       and (
             (:cursorCreatedAt is null and :cursorId is null)
          or (p.createdAt < :cursorCreatedAt)
