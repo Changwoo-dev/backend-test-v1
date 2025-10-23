@@ -3,9 +3,11 @@ package im.bigs.pg.application.payment.service
 import im.bigs.pg.application.payment.port.`in`.QueryFilter
 import im.bigs.pg.application.payment.port.`in`.QueryPaymentsUseCase
 import im.bigs.pg.application.payment.port.`in`.QueryResult
+import im.bigs.pg.application.payment.port.out.PaymentOutPort
 import im.bigs.pg.domain.payment.PaymentSummary
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.time.ZoneOffset
 import java.util.Base64
 
 /**
@@ -14,7 +16,9 @@ import java.util.Base64
  * - 통계는 조회 조건과 동일한 집합을 대상으로 계산됩니다.
  */
 @Service
-class QueryPaymentsService : QueryPaymentsUseCase {
+class QueryPaymentsService(
+    private val paymentOutPort: PaymentOutPort
+) : QueryPaymentsUseCase {
     /**
      * 필터를 기반으로 결제 내역을 조회합니다.
      *
@@ -25,22 +29,47 @@ class QueryPaymentsService : QueryPaymentsUseCase {
      * @return 조회 결과(목록/통계/커서)
      */
     override fun query(filter: QueryFilter): QueryResult {
+        val (cursorCreatedAt, cursorId) = decodeCursor(filter.cursor)
+
+        val items = paymentOutPort.findPayments(
+            partnerId = filter.partnerId,
+            status = filter.status,
+            from = filter.from?.atZone(ZoneOffset.UTC)?.toInstant(),
+            to = filter.to?.atZone(ZoneOffset.UTC)?.toInstant(),
+            cursorCreatedAt = cursorCreatedAt,
+            cursorId = cursorId,
+            limit = filter.limit + 1
+        )
+
+        val summary = paymentOutPort.findPaymentSummary(
+            partnerId = filter.partnerId,
+            status = filter.status,
+            from = filter.from?.atZone(ZoneOffset.UTC)?.toInstant(),
+            to = filter.to?.atZone(ZoneOffset.UTC)?.toInstant()
+        )
+
+        val hasNext = items.size > filter.limit
+        val trimmed = if (hasNext) items.dropLast(1) else items
+        val last = trimmed.lastOrNull()
+        val nextCursor = encodeCursor(
+            last?.createdAt?.atZone(ZoneOffset.UTC)?.toInstant(),
+            last?.id
+        )
+
         return QueryResult(
-            items = emptyList(),
-            summary = PaymentSummary(count = 0, totalAmount = java.math.BigDecimal.ZERO, totalNetAmount = java.math.BigDecimal.ZERO),
-            nextCursor = null,
-            hasNext = false,
+            items = trimmed,
+            summary = summary,
+            nextCursor = nextCursor,
+            hasNext = hasNext
         )
     }
 
-    /** 다음 페이지 이동을 위한 커서 인코딩. */
     private fun encodeCursor(createdAt: Instant?, id: Long?): String? {
         if (createdAt == null || id == null) return null
         val raw = "${createdAt.toEpochMilli()}:$id"
         return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.toByteArray())
     }
 
-    /** 요청으로 전달된 커서 복원. 유효하지 않으면 null 커서로 간주합니다. */
     private fun decodeCursor(cursor: String?): Pair<Instant?, Long?> {
         if (cursor.isNullOrBlank()) return null to null
         return try {
