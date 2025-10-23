@@ -11,6 +11,7 @@ import im.bigs.pg.domain.calculation.FeeCalculator
 import im.bigs.pg.domain.payment.Payment
 import im.bigs.pg.domain.payment.PaymentStatus
 import org.springframework.stereotype.Service
+import java.time.LocalDateTime
 
 /**
  * 결제 생성 유스케이스 구현체.
@@ -46,13 +47,23 @@ class PaymentService(
                 productName = command.productName,
             ),
         )
-        val hardcodedRate = java.math.BigDecimal("0.0300")
-        val hardcodedFixed = java.math.BigDecimal("100")
-        val (fee, net) = FeeCalculator.calculateFee(command.amount, hardcodedRate, hardcodedFixed)
+
+        // 현재 유효한 수수료 정책이 존재하는지 조회.
+        val policy = feePolicyRepository.findEffectivePolicy(partner.id, LocalDateTime.now())
+            ?: throw IllegalStateException("No fee policy found for partner ${partner.id}")
+
+        // 정책 기반 수수료/정산금 계산
+        val (fee, net) = FeeCalculator.calculateFee(
+            amount = command.amount,
+            rate = policy.percentage,
+            fixed = policy.fixedFee
+        )
+
+        // 결제 저장
         val payment = Payment(
             partnerId = partner.id,
             amount = command.amount,
-            appliedFeeRate = hardcodedRate,
+            appliedFeeRate = policy.percentage,
             feeAmount = fee,
             netAmount = net,
             cardBin = command.cardBin,
