@@ -8,6 +8,7 @@ import im.bigs.pg.application.payment.port.`in`.PaymentCommand
 import im.bigs.pg.application.payment.port.`in`.PaymentUseCase
 import im.bigs.pg.application.payment.port.`in`.QueryFilter
 import im.bigs.pg.application.payment.port.`in`.QueryPaymentsUseCase
+import im.bigs.pg.domain.payment.Payment
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.ResponseEntity
 import org.springframework.validation.annotation.Validated
@@ -44,16 +45,15 @@ class PaymentController(
      */
     @PostMapping
     fun create(@RequestBody req: CreatePaymentRequest): ResponseEntity<PaymentResponse> {
-        val saved = paymentUseCase.pay(
-            PaymentCommand(
-                partnerId = req.partnerId,
-                amount = req.amount,
-                cardBin = req.cardBin,
-                cardLast4 = req.cardLast4,
-                productName = req.productName,
-            ),
+        val command = PaymentCommand(
+            partnerId = req.partnerId,
+            amount = req.amount,
+            cardBin = req.cardBin,
+            cardLast4 = req.cardLast4,
+            productName = req.productName
         )
-        return ResponseEntity.ok(PaymentResponse.from(saved))
+        val payment: Payment = paymentUseCase.pay(command)
+        return ResponseEntity.ok(PaymentResponse.from(payment))
     }
 
     /** 목록 + 통계를 포함한 조회 응답. */
